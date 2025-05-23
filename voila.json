@@ -1,0 +1,12 @@
+{
+    "Voila": {
+        "open_browser": false
+    },
+    "VoilaConfiguration": {
+        "file_allowlist": [
+            ".*\\.ttf"
+        ],
+        "static_root": "voila_static",
+        "show_tracebacks": true
+    }
+}
