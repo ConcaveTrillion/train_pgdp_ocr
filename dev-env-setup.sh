@@ -11,3 +11,7 @@ python -m pip install --upgrade pip
 git clone https://github.com/mindee/doctr.git doctr_package
 cd doctr_package
 pip install -e .[torch]
+
+# use pd_book_tools from local install as well
+
+pip install -e ../pd_book_tools
