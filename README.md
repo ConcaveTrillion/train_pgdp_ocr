@@ -20,6 +20,8 @@ Install dependencies.
 Check pre-commit
 `pre-commit`
 
+To get the model files, you need to use git lfs.
+https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage
 
 ## Usage
 
@@ -69,4 +71,4 @@ Once you've done this, you can run the model training notebook.
 See LICENSE file.
 
 
-https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage
+
