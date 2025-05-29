@@ -1,0 +1,25 @@
+[project]
+name = "train-pgdp-ocr"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ipykernel",
+    "ipywidgets",
+    "isort>=6.0",
+    "jupyterlab>=4.0",
+    "matplotlib>=3.10.1",
+    "pd-book-tools",
+    "pre-commit>=4.2.0",
+    "pytest>=8.3",
+    "python-doctr>=0.11.1a0",
+    "ruff>=0.11.12",
+    "torch>=2.7.0",
+    "torchaudio>=2.7.0",
+    "torchvision>=0.22.0",
+    "voila>=0.4.0",
+]
+
+[tool.uv.sources]
+pd-book-tools = { path = "../pd_book_tools" }
