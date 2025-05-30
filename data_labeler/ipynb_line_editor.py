@@ -625,9 +625,41 @@ class IpynbLineEditor:
         EditBboxMarginAdjustRight.on_click(
             lambda _: self.edit_bbox_adjust_margin(margin, 1)
         )
+        EditBboxMarginAdjustLeft5 = Button(
+            description="←5" if margin in ["L", "R"] else "↑5",
+            layout=Layout(width="30px", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBboxMarginAdjustLeft5.on_click(
+            lambda _: self.edit_bbox_adjust_margin(margin, -5)
+        )
+        EditBboxMarginAdjustRight5 = Button(
+            description="→5" if margin in ["L", "R"] else "↓5",
+            layout=Layout(width="30px", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBboxMarginAdjustRight5.on_click(
+            lambda _: self.edit_bbox_adjust_margin(margin, 5)
+        )
+        EditBboxMarginAdjustLeft10 = Button(
+            description="←10" if margin in ["L", "R"] else "↑10",
+            layout=Layout(width="40px", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBboxMarginAdjustLeft10.on_click(
+            lambda _: self.edit_bbox_adjust_margin(margin, -10)
+        )
+        EditBboxMarginAdjustRight10 = Button(
+            description="→10" if margin in ["L", "R"] else "↓10",
+            layout=Layout(width="40px", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBboxMarginAdjustRight10.on_click(
+            lambda _: self.edit_bbox_adjust_margin(margin, 10)
+        )
         return [
             EditBboxMarginText,
             EditBboxMarginAdjustLeft,
+            EditBboxMarginAdjustLeft5,
+            EditBboxMarginAdjustLeft10,
+            EditBboxMarginAdjustRight10,
+            EditBboxMarginAdjustRight5,
             EditBboxMarginAdjustRight,
         ]
 
