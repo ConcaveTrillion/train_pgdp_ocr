@@ -88,7 +88,7 @@ class IpynbPageEditor:
                 "Only Mismatches": LineMatching.SHOW_ONLY_MISMATCHES,
                 "Only Unvalidated Mismatches": LineMatching.SHOW_ONLY_UNVALIDATED_MISMATCHES,
             },
-            value=LineMatching.SHOW_ONLY_MISMATCHES,
+            value=self.line_matching_configuration,
             description="",
             disabled=False,
             orientation="horizontal",
@@ -144,7 +144,7 @@ class IpynbPageEditor:
         monospace_font_path: pathlib.Path | str = None,
         page_image_change_callback: callable = None,
     ):
-        self.line_matching_configuration = LineMatching.SHOW_ONLY_MISMATCHES
+        self.line_matching_configuration = LineMatching.SHOW_ALL_LINES
         # self.show_exact_line_matches = False
         self._current_pgdp_page = current_pgdp_page
         self._current_ocr_page = current_ocr_page
