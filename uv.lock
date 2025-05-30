@@ -1553,7 +1553,7 @@ wheels = [
 [[package]]
 name = "pd-book-tools"
 version = "0.1.0"
-source = { directory = "../pd_book_tools" }
+source = { editable = "../pd_book_tools" }
 dependencies = [
     { name = "ipython" },
     { name = "ipywidgets" },
@@ -2671,7 +2671,7 @@ requires-dist = [
     { name = "isort", specifier = ">=6.0" },
     { name = "jupyterlab", specifier = ">=4.0" },
     { name = "matplotlib", specifier = ">=3.10.1" },
-    { name = "pd-book-tools", directory = "../pd_book_tools" },
+    { name = "pd-book-tools", editable = "../pd_book_tools" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "python-doctr", specifier = ">=0.11.1a0" },
