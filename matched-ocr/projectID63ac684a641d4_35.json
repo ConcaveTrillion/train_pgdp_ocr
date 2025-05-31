@@ -8020,10 +8020,11 @@
                       },
                       "ocr_confidence": null,
                       "word_labels": [],
-                      "ground_truth_text": "c",
+                      "ground_truth_text": "C",
                       "ground_truth_bounding_box": null,
                       "ground_truth_match_keys": {
-                        "split": true
+                        "split": true,
+                        "match_score": 100
                       }
                     },
                     {
