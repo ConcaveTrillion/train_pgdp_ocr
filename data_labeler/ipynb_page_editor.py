@@ -46,7 +46,7 @@ class IpynbPageEditor:
         if change["new"] is None:
             logger.debug("New value is None.")
             return
-        if change["new"] == self.line_matching_configuration:
+        if change["new"] == self.line_matching_configuration.value:
             logger.debug("New value is the same as the old value.")
             return
 

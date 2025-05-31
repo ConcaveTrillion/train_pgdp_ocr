@@ -17,6 +17,8 @@ from ipywidgets import (
     VBox,
 )
 
+from shutil import copyfile
+
 from doctr.io import DocumentFile
 from doctr.models import (
     crnn_vgg16_bn,
@@ -90,7 +92,9 @@ class IpynbLabeler:
     monospace_font_name: str
     monospace_font_path: str
 
+    doctr_predictor = None
     pgdp_export: PGDPExport
+    labeled_ocr_path: pathlib.Path
     training_set_output_path: pathlib.Path
     validation_set_output_path: pathlib.Path
 
@@ -111,19 +115,13 @@ class IpynbLabeler:
         if isinstance(monospace_font_path, str):
             monospace_font_path = pathlib.Path(monospace_font_path)
         self.monospace_font_path = monospace_font_path
-        # Inject custom CSS for the Jupyter environment
+        # Inject custom CSS for font definition in the Jupyter environment
         css = f"""
         @font-face {{
             font-family: '{self.monospace_font_name}';
             src: url('{self.monospace_font_path}') format('truetype');
         }}
         """
-
-        # input, textarea {{
-        #     font-family: '{self.monospace_font_path}', monospace !important;
-        #     font-size: 12px !important;
-        # }}
-
         display(HTML(f"<style>{css}</style>"))
 
     def init_header_ui(self):
@@ -135,29 +133,54 @@ class IpynbLabeler:
         self.go_to_page_textbox = BoundedIntText()
         self.go_to_page_textbox.layout = Layout(width="65px")
 
-        self.save_page_changes_button = Button(
-            description="Save OCR Changes",
+        self.save_ocr_to_file_button = Button(
+            description="Save OCR to File",
         )
-        # TODO: Add Onclick to Save OCR as dict to a file
-
-        self.export_training_button = Button(
-            description="Export to ML Training",
+        # expand button text to fill only what it needs
+        self.save_ocr_to_file_button.style.button_width = "auto"
+        self.save_ocr_to_file_button.layout = Layout(
+            width="auto",
         )
-        self.export_training_button.on_click(self.save_training_button)
-
-        self.export_validation_button = Button(
-            description="Export to ML Validation",
+        self.save_ocr_to_file_button.on_click(
+            lambda event: self.export_ocr_document(event)
         )
-        self.export_validation_button.on_click(self.save_validations_button)
 
-        self.reset_ocr_button = Button(description="Reset Page OCR")
+        self.reload_ocr_from_file_button = Button(
+            description="Reload OCR from File",
+        )
+        self.reload_ocr_from_file_button.layout = Layout(
+            width="auto",
+        )
 
-        def reset_ocr(event=None):
-            # Reset the OCR for the current page
-            self.run_ocr(force_refresh_ocr=True)
+        def reload_ocr_from_file(event):
+            self.import_ocr_document()
             self.refresh_ui()
 
-        self.reset_ocr_button.on_click(reset_ocr)
+        self.reload_ocr_from_file_button.on_click(
+            lambda event: reload_ocr_from_file(event)
+        )
+
+        self.reset_ocr_button = Button(description="Reset OCR")
+        self.reset_ocr_button.layout = Layout(
+            width="auto",
+        )
+        self.reset_ocr_button.on_click(lambda event: self.reset_ocr())
+
+        self.export_training_button = Button(
+            description="Export Training Set",
+        )
+        self.export_training_button.on_click(lambda event: self.export_training(event))
+        self.export_training_button.layout = Layout(
+            width="auto",
+        )
+
+        self.export_validation_button = Button(
+            description="Export Validation Set",
+        )
+        self.export_validation_button.on_click(self.export_validations)
+        self.export_validation_button.layout = Layout(
+            width="auto",
+        )
 
         self.header_box = VBox(
             [
@@ -173,10 +196,11 @@ class IpynbLabeler:
                 ),
                 HBox(
                     [
-                        self.save_page_changes_button,
+                        self.save_ocr_to_file_button,
+                        self.reload_ocr_from_file_button,
+                        self.reset_ocr_button,
                         self.export_training_button,
                         self.export_validation_button,
-                        self.reset_ocr_button,
                     ]
                 ),
             ]
@@ -192,7 +216,7 @@ class IpynbLabeler:
         self.next_button.on_click(self.next_page)
         self.go_to_page_button.on_click(self.go_to_page)
 
-    def init_main_ui(self):
+    def init_image_ui(self):
         self.plain_image = Image(
             layout=Layout(min_width="300px", max_height="900px", align_self="baseline")
         )
@@ -260,6 +284,9 @@ class IpynbLabeler:
         )
         self.image_vbox.layout = Layout(flex="0 0 30%")
 
+    def init_main_ui(self):
+        self.init_image_ui()
+
         try:
             current_pgdp_page = self.current_pgdp_page
         except KeyError:
@@ -322,17 +349,15 @@ class IpynbLabeler:
     def init_footer_ui(self):
         self.footer_hbox = HBox()
 
-    def init_ocr(self):
+    def init_ocr_doctr_predictor(self):
         if self.doctr_predictor:
             # Use the provided doctr predictor if available
             self.main_ocr_predictor = self.doctr_predictor
             return
-        # Otherwise, use the default doctr models
 
+        # Otherwise, use the default doctr models
         # Check if GPU is available
-        device, device_nbr = (
-            ("cuda", "cuda:0") if torch.cuda.is_available() else ("cpu", "cpu")
-        )
+        device, _ = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using {device} for OCR")
 
         det_model = db_resnet50(pretrained=True).to(device)
@@ -362,9 +387,17 @@ class IpynbLabeler:
 
         self.main_ocr_predictor = full_predictor
 
+    def create_path(self, str_or_path: pathlib.Path | str) -> pathlib.Path:
+        if isinstance(str_or_path, str):
+            str_or_path = pathlib.Path(str_or_path)
+        if not str_or_path.exists():
+            str_or_path.mkdir(parents=True, exist_ok=True)
+        return str_or_path
+
     def __init__(
         self,
         pgdp_export: PGDPExport,
+        labeled_ocr_path: pathlib.Path | str,
         training_set_output_path: pathlib.Path | str,
         validation_set_output_path: pathlib.Path | str,
         monospace_font_name: str,
@@ -376,17 +409,15 @@ class IpynbLabeler:
         self.doctr_predictor = doctr_predictor
         self.pgdp_export = pgdp_export
 
-        if isinstance(training_set_output_path, str):
-            training_set_output_path = pathlib.Path(training_set_output_path)
-        self.training_set_output_path = training_set_output_path
-        if not self.training_set_output_path.exists():
-            self.training_set_output_path.mkdir(parents=True, exist_ok=True)
-
-        if isinstance(validation_set_output_path, str):
-            validation_set_output_path = pathlib.Path(validation_set_output_path)
-        self.validation_set_output_path = validation_set_output_path
-        if not self.validation_set_output_path.exists():
-            self.validation_set_output_path.mkdir(parents=True, exist_ok=True)
+        self.labeled_ocr_path: pathlib.Path = self.create_path(
+            labeled_ocr_path,
+        )
+        self.training_set_output_path: pathlib.Path = self.create_path(
+            training_set_output_path,
+        )
+        self.validation_set_output_path: pathlib.Path = self.create_path(
+            validation_set_output_path,
+        )
 
         self.page_indexby_name = {
             item.png_file: i for i, item in enumerate(self.pgdp_export.pages)
@@ -408,7 +439,7 @@ class IpynbLabeler:
             self._current_page_idx = start_page_idx
             self.current_page_name = pathlib.Path(self.current_pgdp_page.png_file).stem
 
-        self.init_ocr()
+        self.init_ocr_doctr_predictor()
         self.init_font(monospace_font_name, monospace_font_path)
         self.init_header_ui()
         self.init_main_ui()
@@ -562,29 +593,12 @@ class IpynbLabeler:
         self.page_editor.update_line_matches(
             self.current_pgdp_page, self.current_ocr_page
         )
-        # self.update_line_matches()
 
     def refresh_ui(self):
         self.update_header_elements()
         self.run_ocr()
         self.update_images()
         self.update_text()
-
-    def save_validations_button(self, event=None):
-        # Save the current page
-        prefix = self.pgdp_export.project_id + "_" + str(self.current_page_idx)
-        self.current_ocr_page.convert_to_training_set(
-            output_path=self.validation_set_output_path,
-            prefix=prefix,
-        )
-
-    def save_training_button(self, event=None):
-        # Save the current page
-        prefix = self.pgdp_export.project_id + "_" + str(self.current_page_idx)
-        self.current_ocr_page.convert_to_training_set(
-            output_path=self.training_set_output_path,
-            prefix=prefix,
-        )
 
     # Navigation Buttons
     def prev_page(self, event=None):
@@ -625,9 +639,13 @@ class IpynbLabeler:
         }
 
     def run_ocr(self, force_refresh_ocr=False):
-        """Run OCR or get cached or new matched OCR page and update
-        docTR_ocr_cv2_image runs multiple models on the image and returns a list of results.
+        """Run OCR or get saved OCR document dict and update the current page
+        If the OCR document is already saved, it will be imported and used.
+        If force_refresh_ocr is True, it will re-run the OCR even if the document exists.
         """
+        # Import the saved label data if it exists
+        self.import_ocr_document()
+
         if (
             self.current_page_idx not in self.matched_ocr_pages.keys()
             or force_refresh_ocr
@@ -638,15 +656,21 @@ class IpynbLabeler:
             doctr_result = self.main_ocr_predictor(doctr_image)
             docTR_output = doctr_result.export()
 
-            ocr_doc = Document.from_doctr_output(docTR_output, source_image)
+            ocr_document = Document.from_doctr_output(docTR_output, source_image)
             # Always 1 page per OCR in this case
-            ocr_page: Page = ocr_doc.pages[0]
+            ocr_page: Page = ocr_document.pages[0]
             ocr_page.cv2_numpy_page_image = cv2.imread(source_image)
 
             # expand bboxes of each word to capture missing pixels
             # Expand the word bounding boxes if they were shrunk too much or didn't include all the connected pixels
             ui_logger.debug("Expanding word bounding boxes to content.")
             for word in ocr_page.words:
+                logger.debug(
+                    f"Refining word bounding box for word: {word.text} with bbox: {word.bounding_box}"
+                )
+                word.bounding_box = word.bounding_box.crop_bottom(
+                    image=ocr_page.cv2_numpy_page_image
+                )
                 word.bounding_box = word.bounding_box.expand_to_content(
                     image=ocr_page.cv2_numpy_page_image
                 )
@@ -658,6 +682,88 @@ class IpynbLabeler:
             self.matched_ocr_pages[self.current_page_idx] = {
                 "page": ocr_page,
             }
+
+    def reset_ocr(self, event=None):
+        # Reset the OCR for the current page and refresh the UI
+        self.run_ocr(force_refresh_ocr=True)
+        self.refresh_ui()
+
+    @property
+    def export_prefix(self):
+        return f"{self.pgdp_export.project_id}_{self.current_page_idx}"
+
+    def export_validations(self, event=None):
+        # Save the current page
+        prefix = self.export_prefix
+        self.current_ocr_page.convert_to_training_set(
+            output_path=self.validation_set_output_path,
+            prefix=prefix,
+        )
+
+    def export_training(self, event=None):
+        # Save the current page
+        prefix = self.export_prefix
+        self.current_ocr_page.convert_to_training_set(
+            output_path=self.training_set_output_path,
+            prefix=prefix,
+        )
+
+    def export_ocr_document(self, event=None):
+        """Export a dict of the current OCR document to a file"""
+        if self.current_page_idx not in self.matched_ocr_pages:
+            logger.error("No OCR page to save.")
+            return
+
+        ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
+        ocr_image_path = self.current_pgdp_page.png_full_path
+
+        # copy the image to the labeled OCR path
+        target_image_path = pathlib.Path(
+            self.labeled_ocr_path, f"{self.export_prefix}.png"
+        )
+
+        ocr_document: Document = Document(
+            pages=[ocr_page],
+            source_lib="doctr-pgdp-labeled",
+            source_path=target_image_path,
+        )
+
+        target_path = pathlib.Path(self.labeled_ocr_path, f"{self.export_prefix}.json")
+
+        logger.info(f"Exporting OCR document to {target_path}")
+        ocr_document.to_json_file(target_path)
+
+        logger.info(f"Copying OCR image to {target_image_path}")
+        copyfile(ocr_image_path, target_image_path)
+
+    def import_ocr_document(self):
+        """Import an OCR document from a JSON file and update the current page"""
+        ocr_json_path = pathlib.Path(
+            self.labeled_ocr_path, f"{self.export_prefix}.json"
+        )
+        logger.debug(f"Importing OCR document from {ocr_json_path}")
+
+        if not ocr_json_path.exists():
+            logger.error(f"OCR JSON file does not exist: {ocr_json_path}")
+            return
+
+        ocr_document: Document = Document.from_json_file(ocr_json_path)
+        if len(ocr_document.pages) != 1:
+            logger.error("OCR document must contain exactly one page.")
+            raise ValueError("OCR document must contain exactly one page.")
+            return
+
+        ocr_page: Page = ocr_document.pages[0]
+        source_image = ocr_document.source_path
+        if not source_image:
+            logger.error("OCR document does not contain a source image path.")
+            raise ValueError("OCR document does not contain a source image path.")
+            return
+        ocr_page.cv2_numpy_page_image = cv2.imread(source_image)
+
+        self.matched_ocr_pages[self.current_page_idx] = {
+            "page": ocr_page,
+        }
 
     def display(self):
         # Inject custom CSS for the Jupyter environment monospacing the fonts
