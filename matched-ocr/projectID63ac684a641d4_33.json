@@ -8348,10 +8348,10 @@
                       },
                       "ocr_confidence": 0.9968499541282654,
                       "word_labels": [],
-                      "ground_truth_text": "c",
+                      "ground_truth_text": "C",
                       "ground_truth_bounding_box": null,
                       "ground_truth_match_keys": {
-                        "match_score": 100
+                        "match_score": 0
                       }
                     }
                   ],
