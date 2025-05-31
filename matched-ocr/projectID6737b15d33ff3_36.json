@@ -1,6 +1,6 @@
 {
   "source_lib": "doctr-pgdp-labeled",
-  "source_path": "labeled-ocr/projectID6737b15d33ff3_36.png",
+  "source_path": "matched-ocr/projectID6737b15d33ff3_36.png",
   "pages": [
     {
       "type": "Page",
@@ -5189,24 +5189,46 @@
                     },
                     {
                       "type": "Word",
-                      "text": "(AD.56o-636),",
+                      "text": "(AD.",
                       "bounding_box": {
                         "top_left": {
                           "x": 0.531578947368421,
                           "y": 0.6527415143603134
                         },
                         "bottom_right": {
-                          "x": 0.751578947368421,
+                          "x": 0.6,
                           "y": 0.6762402088772846
                         }
                       },
-                      "ocr_confidence": 0.8241967260837555,
+                      "ocr_confidence": null,
                       "word_labels": [],
-                      "ground_truth_text": "(A.D. 560-636),",
+                      "ground_truth_text": "(A.D.",
                       "ground_truth_bounding_box": null,
                       "ground_truth_match_keys": {
-                        "match_type": "difflib-line-replace-word-replace-combined",
-                        "match_score": 86
+                        "match_type": "difflib-line-replace-word-replace",
+                        "match_score": 89
+                      }
+                    },
+                    {
+                      "type": "Word",
+                      "text": "56o-636),",
+                      "bounding_box": {
+                        "top_left": {
+                          "x": 0.6094736842105263,
+                          "y": 0.6527415143603134
+                        },
+                        "bottom_right": {
+                          "x": 0.751578947368421,
+                          "y": 0.6755874673629243
+                        }
+                      },
+                      "ocr_confidence": null,
+                      "word_labels": [],
+                      "ground_truth_text": "560-636),",
+                      "ground_truth_bounding_box": null,
+                      "ground_truth_match_keys": {
+                        "match_type": "difflib-line-replace-word-replace",
+                        "match_score": 89
                       }
                     },
                     {
