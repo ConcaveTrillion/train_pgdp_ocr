@@ -1,4 +1,4 @@
-# pd-book-tools
+# train_pgdp_ocr
 
 Python tools for training DocTR OCR models on PGDP Data
 
@@ -10,9 +10,14 @@ https://docs.astral.sh/uv/getting-started/installation/
 
 I used: `pipx install uv` (you will need pipx to do this), upgrade with `pipx upgrade uv`
 
+The Wget way is probably better.
+
 Then run `uv venv` to create a venv.
 
 Deactivate any current venv (`deactivate`), then activate the venv `source .venv/bin/activate`
+
+Clone pd-book-tools from github in the parent directory of this repo.
+gh repo clone ConcaveTrillion/pd-book-tools
 
 Install dependencies.
 `uv sync`

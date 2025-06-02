@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-pd-book-tools = { path = "../pd_book_tools", editable = true }
+pd-book-tools = { path = "../pd-book-tools", editable = true }
 
 [tool.setuptools.packages.find]
 include = ["data_labeler"]
