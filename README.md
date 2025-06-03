@@ -30,10 +30,15 @@ https://docs.github.com/en/repositories/working-with-files/managing-large-files/
 
 ## Usage
 
+### Labeler
+
 `voila data-labeler.ipynb` will run the labeling notebook web server
 
+Connect to http://localhost:8866/ to use the labeler
 
-### `model-trainer.ipynb`
+### Model Trainer
+
+`jupyter model-trainer.ipynb` (or run in VS Code or your preferred notebook running tool)
 
 To use the trainer, you have to pull down the doctr git repo as the scripts are not in the pypi doctr toolset.
 

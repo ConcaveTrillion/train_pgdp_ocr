@@ -8,5 +8,11 @@
         ],
         "static_root": "voila_static",
         "show_tracebacks": true
+    },
+    "ZMQChannelsWebsocketConnection": {
+        "iopub_msg_rate_limit": 100000,
+        "iopub_data_rate_limit": 1.0e10
     }
 }
+
+
