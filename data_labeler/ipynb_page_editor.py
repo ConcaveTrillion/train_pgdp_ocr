@@ -28,8 +28,8 @@ class IpynbPageEditor:
 
     line_matching_configuration: LineMatching.SHOW_ALL_LINES
 
-    _current_pgdp_page: PGDPPage
-    _current_ocr_page: Page
+    _current_pgdp_page: PGDPPage | None
+    _current_ocr_page: Page | None
 
     page_image_change_callback: callable = None
 
@@ -138,8 +138,8 @@ class IpynbPageEditor:
 
     def __init__(
         self,
-        current_pgdp_page: PGDPPage,
-        current_ocr_page: Page,
+        current_pgdp_page: PGDPPage | None,
+        current_ocr_page: Page | None,
         monospace_font_name: str = "Courier New",
         monospace_font_path: pathlib.Path | str = None,
         page_image_change_callback: callable = None,

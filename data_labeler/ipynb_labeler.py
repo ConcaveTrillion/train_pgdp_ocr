@@ -299,7 +299,7 @@ class IpynbLabeler:
         def page_image_change_callback():
             self.current_ocr_page.refresh_page_images()
             self.update_images()
-
+      
         self.page_editor = IpynbPageEditor(
             current_pgdp_page,
             current_ocr_page,
@@ -590,34 +590,43 @@ class IpynbLabeler:
     def update_text(self):
         self.update_ocr_text()
         self.update_pgdp_text()
-        self.page_editor.update_line_matches(
-            self.current_pgdp_page, self.current_ocr_page
-        )
 
     def refresh_ui(self):
+        ui_logger.debug("Refreshing UI for page index: " + str(self.current_page_idx))
+
         self.update_header_elements()
         self.run_ocr()
         self.update_images()
         self.update_text()
+        
+        self.page_editor.update_line_matches(
+            self.current_pgdp_page, self.current_ocr_page
+        )
+        ui_logger.debug(
+            "UI refreshed for page index: " + str(self.current_page_idx)
+        )
 
     # Navigation Buttons
     def prev_page(self, event=None):
+        ui_logger.debug("Going to previous page")
         if self.current_page_idx >= 1:
-            self.current_page_idx -= 1
-            self.refresh_ui()
+            self.current_page_idx = self.current_page_idx - 1
 
     def next_page(self, event=None):
+        ui_logger.debug("Going to next page")
         if self.current_page_idx < self.total_pages:
-            self.current_page_idx += 1
-            self.refresh_ui()
+            self.current_page_idx = self.current_page_idx + 1
 
-    def go_to_page(self, event=None):
+    def go_to_page(self, event=None):        
         go_to_page_idx = self.go_to_page_textbox.value
+        ui_logger.debug(f"Going to page index: {go_to_page_idx}")
         if go_to_page_idx < self.total_pages and go_to_page_idx >= 0:
             self.current_page_idx = go_to_page_idx
-            self.refresh_ui()
 
     def reload_page_images_ui(self):
+        logger.debug(
+            f"Reloading page images for page index: {self.current_page_idx}"
+        )
         ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
         self.matched_ocr_pages[self.current_page_idx] = {
             **self.matched_ocr_pages[self.current_page_idx],
@@ -643,6 +652,9 @@ class IpynbLabeler:
         If the OCR document is already saved, it will be imported and used.
         If force_refresh_ocr is True, it will re-run the OCR even if the document exists.
         """
+        ui_logger.debug(
+            f"Running OCR for page index: {self.current_page_idx}, force_refresh_ocr: {force_refresh_ocr}"
+        )
         # Import the saved label data if it exists
         self.import_ocr_document()
 
@@ -675,7 +687,7 @@ class IpynbLabeler:
                     image=ocr_page.cv2_numpy_page_image
                 )
 
-            ocr_page.refine_bounding_boxes(padding_px=1)
+            ocr_page.refine_bounding_boxes(padding_px=2)
             ocr_page.reorganize_page()
             ocr_page.add_ground_truth(self.current_pgdp_page.processed_page_text)
 
