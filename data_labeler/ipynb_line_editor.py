@@ -583,7 +583,7 @@ class IpynbLineEditor:
 
         ui_logger.debug("Refining bbox.")
         normalized_refined_bbox: BoundingBox = normalized_modified_bbox.refine(
-            img_ndarray, padding_px=1
+            img_ndarray, padding_px=2
         )
         ui_logger.debug(
             f"Refined Edit bounding box: {normalized_refined_bbox.to_ltrb()}"
