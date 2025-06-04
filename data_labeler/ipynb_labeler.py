@@ -299,7 +299,7 @@ class IpynbLabeler:
         def page_image_change_callback():
             self.current_ocr_page.refresh_page_images()
             self.update_images()
-      
+
         self.page_editor = IpynbPageEditor(
             current_pgdp_page,
             current_ocr_page,
@@ -598,13 +598,11 @@ class IpynbLabeler:
         self.run_ocr()
         self.update_images()
         self.update_text()
-        
+
         self.page_editor.update_line_matches(
             self.current_pgdp_page, self.current_ocr_page
         )
-        ui_logger.debug(
-            "UI refreshed for page index: " + str(self.current_page_idx)
-        )
+        ui_logger.debug("UI refreshed for page index: " + str(self.current_page_idx))
 
     # Navigation Buttons
     def prev_page(self, event=None):
@@ -617,16 +615,14 @@ class IpynbLabeler:
         if self.current_page_idx < self.total_pages:
             self.current_page_idx = self.current_page_idx + 1
 
-    def go_to_page(self, event=None):        
+    def go_to_page(self, event=None):
         go_to_page_idx = self.go_to_page_textbox.value
         ui_logger.debug(f"Going to page index: {go_to_page_idx}")
         if go_to_page_idx < self.total_pages and go_to_page_idx >= 0:
             self.current_page_idx = go_to_page_idx
 
     def reload_page_images_ui(self):
-        logger.debug(
-            f"Reloading page images for page index: {self.current_page_idx}"
-        )
+        logger.debug(f"Reloading page images for page index: {self.current_page_idx}")
         ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
         self.matched_ocr_pages[self.current_page_idx] = {
             **self.matched_ocr_pages[self.current_page_idx],
