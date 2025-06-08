@@ -2,6 +2,8 @@ import pathlib
 
 # from logging import DEBUG as logging_DEBUG
 from logging import getLogger
+from textwrap import dedent
+from typing import Optional
 
 import cv2
 import torch
@@ -27,6 +29,8 @@ from doctr.models import (
     ocr_predictor,
     recognition_predictor,
 )
+from doctr.models.predictor.pytorch import OCRPredictor
+
 from pd_book_tools.image_processing.cv2_processing.encoding import (
     encode_bgr_image_as_png,
 )
@@ -45,8 +49,8 @@ layout_no_padding_margin = Layout(padding="0px", margin="0px", flex="1 1 auto")
 
 
 class IpynbLabeler:
-    _current_page_idx = 0
-    _total_pages = 0
+    _current_page_idx: int = 0
+    _total_pages: int = 0
 
     current_page_name = ""
     go_to_page_idx = 0
@@ -90,9 +94,9 @@ class IpynbLabeler:
     matched_ocr_pages = {}
 
     monospace_font_name: str
-    monospace_font_path: str
+    monospace_font_path: pathlib.Path
 
-    doctr_predictor = None
+    doctr_predictor: Optional[OCRPredictor] = None
     pgdp_export: PGDPExport
     labeled_ocr_path: pathlib.Path
     training_set_output_path: pathlib.Path
@@ -102,26 +106,47 @@ class IpynbLabeler:
     page_indexby_nbr: dict
 
     ocr_models: dict
-    main_ocr_predictor: ocr_predictor
+    main_ocr_predictor: OCRPredictor
 
     page_editor: IpynbPageEditor
 
     def init_font(
         self,
         monospace_font_name: str,
-        monospace_font_path: pathlib.Path | str,
+        monospace_font_path: pathlib.Path | str | None = None,
     ):
         self.monospace_font_name = monospace_font_name
         if isinstance(monospace_font_path, str):
             monospace_font_path = pathlib.Path(monospace_font_path)
-        self.monospace_font_path = monospace_font_path
-        # Inject custom CSS for font definition in the Jupyter environment
-        css = f"""
-        @font-face {{
-            font-family: '{self.monospace_font_name}';
-            src: url('{self.monospace_font_path}') format('truetype');
-        }}
-        """
+        if monospace_font_path is not None and pathlib.Path.exists(monospace_font_path):
+            self.monospace_font_path = monospace_font_path
+            # Inject custom CSS for font definition in the Jupyter environment
+            css = dedent(
+                f"""
+                @font-face {{
+                    font-family: '{self.monospace_font_name}';
+                    src: url('{self.monospace_font_path}') format('truetype');
+                }}
+                """
+            )
+        elif monospace_font_name:
+            # If no path is provided, use the font name to define the font
+            css = dedent(
+                f"""
+                @font-face {{
+                    font-family: '{self.monospace_font_name}';
+                }}
+                """
+            )
+        else:
+            # Fallback to a default monospace font if no path is provided
+            css = dedent(
+                """
+                @font-face {{
+                    font-family: 'monospace';
+                }}
+                """
+            )
         display(HTML(f"<style>{css}</style>"))
 
     def init_header_ui(self):
@@ -182,6 +207,23 @@ class IpynbLabeler:
             width="auto",
         )
 
+        self.expand_and_refine_all_bboxes_button = Button(
+            description="Expand & Refine All BBoxes",
+        )
+        self.expand_and_refine_all_bboxes_button.layout = Layout(
+            width="auto",
+        )
+        self.expand_and_refine_all_bboxes_button.on_click(
+            lambda event: self.expand_and_refine_all_bboxes()
+        )
+        self.refine_all_bboxes_button = Button(
+            description="Refine All BBoxes",
+        )
+        self.refine_all_bboxes_button.layout = Layout(
+            width="auto",
+        )
+        self.refine_all_bboxes_button.on_click(lambda event: self.refine_all_bboxes())
+
         self.header_box = VBox(
             [
                 HBox(
@@ -201,6 +243,12 @@ class IpynbLabeler:
                         self.reset_ocr_button,
                         self.export_training_button,
                         self.export_validation_button,
+                    ]
+                ),
+                HBox(
+                    [
+                        self.expand_and_refine_all_bboxes_button,
+                        self.refine_all_bboxes_button,
                     ]
                 ),
             ]
@@ -304,7 +352,6 @@ class IpynbLabeler:
             current_pgdp_page,
             current_ocr_page,
             self.monospace_font_name,
-            self.monospace_font_path,
             page_image_change_callback=page_image_change_callback,
         )
 
@@ -351,11 +398,11 @@ class IpynbLabeler:
 
     def init_ocr_doctr_predictor(self):
         if self.doctr_predictor:
-            # Use the provided doctr predictor if available
+            # Use the provided doctr predictor if provided
             self.main_ocr_predictor = self.doctr_predictor
             return
 
-        # Otherwise, use the default doctr models
+        # Otherwise, use the default doctr models (not fine-tuned)
         # Check if GPU is available
         device, _ = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using {device} for OCR")
@@ -363,13 +410,14 @@ class IpynbLabeler:
         det_model = db_resnet50(pretrained=True).to(device)
         reco_model = crnn_vgg16_bn(pretrained=True, pretrained_backbone=True).to(device)
 
-        full_predictor = ocr_predictor(
+        # We're going to use pytorch but for some reason it infers the tensorflow predictor
+        full_predictor: OCRPredictor = ocr_predictor(
             det_arch=det_model,
             reco_arch=reco_model,
             pretrained=True,
             assume_straight_pages=True,
             disable_crop_orientation=True,
-        )
+        )  # type: ignore[assignment]
 
         det_predictor = detection_predictor(
             arch=det_model,
@@ -430,7 +478,7 @@ class IpynbLabeler:
 
         if start_page_name:
             new_idx = self.page_indexby_name.get(start_page_name, -1)
-            if new_idx > 0 and new_idx < len(self.total_pages):
+            if new_idx > 0 and new_idx < self.total_pages:
                 self._current_page_idx = start_page_idx
                 self.current_page_name = pathlib.Path(
                     self.current_pgdp_page.png_file
@@ -468,7 +516,7 @@ class IpynbLabeler:
         self.refresh_ui()
 
     @property
-    def total_pages(self):
+    def total_pages(self) -> int:
         return self._total_pages
 
     @total_pages.setter
@@ -643,6 +691,31 @@ class IpynbLabeler:
             ),
         }
 
+    def expand_and_refine_all_bboxes(self):
+        """Expand the bounding boxes of all words in the current OCR page."""
+        ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
+
+        ui_logger.debug("Expanding all word bounding boxes to content and beyond.")
+        for word in ocr_page.words:
+            logger.debug(
+                f"Refining word bounding box for word: {word.text} with bbox: {word.bounding_box}"
+            )
+            word.bounding_box = word.bounding_box.crop_bottom(
+                image=ocr_page.cv2_numpy_page_image
+            )
+            word.bounding_box = word.bounding_box.expand_to_content(
+                image=ocr_page.cv2_numpy_page_image
+            )
+
+        ocr_page.refine_bounding_boxes(padding_px=2)
+        self.refresh_ui()
+
+    def refine_all_bboxes(self):
+        """Refine the bounding boxes of all words in the current OCR page."""
+        ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
+        ocr_page.refine_bounding_boxes(padding_px=2)
+        self.refresh_ui()
+
     def run_ocr(self, force_refresh_ocr=False):
         """Run OCR or get saved OCR document dict and update the current page
         If the OCR document is already saved, it will be imported and used.
@@ -665,25 +738,11 @@ class IpynbLabeler:
             docTR_output = doctr_result.export()
 
             ocr_document = Document.from_doctr_output(docTR_output, source_image)
+
             # Always 1 page per OCR in this case
             ocr_page: Page = ocr_document.pages[0]
-            ocr_page.cv2_numpy_page_image = cv2.imread(source_image)
+            ocr_page.cv2_numpy_page_image = cv2.imread(str(source_image.resolve()))
 
-            # expand bboxes of each word to capture missing pixels
-            # Expand the word bounding boxes if they were shrunk too much or didn't include all the connected pixels
-            ui_logger.debug("Expanding word bounding boxes to content.")
-            for word in ocr_page.words:
-                logger.debug(
-                    f"Refining word bounding box for word: {word.text} with bbox: {word.bounding_box}"
-                )
-                word.bounding_box = word.bounding_box.crop_bottom(
-                    image=ocr_page.cv2_numpy_page_image
-                )
-                word.bounding_box = word.bounding_box.expand_to_content(
-                    image=ocr_page.cv2_numpy_page_image
-                )
-
-            ocr_page.refine_bounding_boxes(padding_px=2)
             ocr_page.reorganize_page()
             ocr_page.add_ground_truth(self.current_pgdp_page.processed_page_text)
 
@@ -767,7 +826,7 @@ class IpynbLabeler:
             logger.error("OCR document does not contain a source image path.")
             raise ValueError("OCR document does not contain a source image path.")
             return
-        ocr_page.cv2_numpy_page_image = cv2.imread(source_image)
+        ocr_page.cv2_numpy_page_image = cv2.imread(str(source_image.resolve()))
 
         self.matched_ocr_pages[self.current_page_idx] = {
             "page": ocr_page,

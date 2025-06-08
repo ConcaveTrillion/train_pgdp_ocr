@@ -1,6 +1,6 @@
-import pathlib
 from enum import Enum
 from logging import getLogger
+from typing import Callable, Optional
 
 from cv2 import line as cv2_line
 from ipywidgets import HTML, Button, HBox, Layout, Text, VBox
@@ -45,8 +45,8 @@ class IpynbLineEditor:
     _current_ocr_line: Block
     _current_ocr_line_p3_gt_text: str
     line_matches: list[dict]
-    page_image_change_callback: callable = None
-    line_change_callback: callable = None
+    page_image_change_callback: Optional[Callable] = None
+    line_change_callback: Optional[Callable] = None
 
     monospace_font_name: str
 
@@ -88,30 +88,16 @@ class IpynbLineEditor:
         border="3px solid green",
     )
 
-    def init_font(
-        self,
-        monospace_font_name: str,
-        monospace_font_path: pathlib.Path | str,
-    ):
-        self.monospace_font_name = monospace_font_name
-        if isinstance(monospace_font_path, str):
-            monospace_font_path = pathlib.Path(monospace_font_path)
-        self.monospace_font_path = monospace_font_path
-
     def __init__(
         self,
         page: Page,
         pgdp_page: PGDPPage,
         line: Block,
-        page_image_change_callback: callable = None,
-        line_change_callback: callable = None,
-        monospace_font_name: str = "Courier New",
-        monospace_font_path: pathlib.Path | str = None,
+        page_image_change_callback: Optional[Callable] = None,
+        line_change_callback: Optional[Callable] = None,
+        monospace_font_name: str = "monospace",
     ):
-        self.init_font(
-            monospace_font_name=monospace_font_name,
-            monospace_font_path=monospace_font_path,
-        )
+        self.monospace_font_name = monospace_font_name
 
         self.GridVBox = VBox()
         self.GridVBox.children = []
@@ -144,8 +130,11 @@ class IpynbLineEditor:
             else:
                 self.GridVBox.layout = self.red_editor_layout
 
-        if self._current_ocr_line.additional_block_attributes.get(
-            "line_editor_validated"
+        if (
+            self._current_ocr_line.additional_block_attributes
+            and self._current_ocr_line.additional_block_attributes.get(
+                "line_editor_validated"
+            )
         ):
             ui_logger.debug(
                 f"Line {self._current_ocr_line.text} is marked as validated."
@@ -190,11 +179,19 @@ class IpynbLineEditor:
         ui_logger.debug("Drawing UI for full line image.")
         self.LineImageHBox = HBox()
         self.LineImageHBox.layout = self.basic_box_layout
-        cropped_line_image_html = get_html_widget_from_cropped_image(
-            self._current_ocr_page.cv2_numpy_page_image,
-            self._current_ocr_line.bounding_box,
-        )
-        self.LineImageHBox.children = [cropped_line_image_html]
+        if self._current_ocr_line.bounding_box:
+            cropped_line_image_html = get_html_widget_from_cropped_image(
+                self._current_ocr_page.cv2_numpy_page_image,
+                self._current_ocr_line.bounding_box,
+            )
+            self.LineImageHBox.children = [cropped_line_image_html]
+        else:
+            ui_logger.warning("Line bounding box is not set. Cannot draw line image.")
+            self.LineImageHBox.children = [
+                HTML(
+                    "<span style='color: red;'>Error, no bounding box for line.</span>"
+                )
+            ]
 
     def draw_ui_fullline_ocr_text_hbox(self):
         ui_logger.debug("Drawing UI for full line OCR text.")
@@ -729,7 +726,7 @@ class IpynbLineEditor:
     def cancel_split_task(self):
         ui_logger.debug("Canceling split task.")
         self.task_type = EditorTaskType.NONE
-        self.task_match_idx = None
+        self.task_match_idx = -1
         self.split_task_x_coordinate = -1
         self.split_task_image_width = -1
         self.redraw_ui()
@@ -747,7 +744,7 @@ class IpynbLineEditor:
     def cancel_edit_bbox_task(self):
         ui_logger.debug("Canceling edit bbox task.")
         self.task_type = EditorTaskType.NONE
-        self.task_match_idx = None
+        self.task_match_idx = -1
         self.edit_margins = [0, 0, 0, 0]  # Reset margins
 
         self.redraw_ui()
@@ -794,7 +791,7 @@ class IpynbLineEditor:
         ui_logger.debug("Word bounding boxes have been refined.")
 
         self.task_type = EditorTaskType.NONE
-        self.task_match_idx = None
+        self.task_match_idx = -1
         self.edit_margins = [0, 0, 0, 0]  # Reset margins
 
         self.redraw_ui()
@@ -852,9 +849,12 @@ class IpynbLineEditor:
 
         # Rematch the words in the line to the associated line ground truth in the page
         ocr_line_tuple = tuple([w.text for w in self._current_ocr_line.items])
-        ground_truth_tuple = tuple(
-            self._current_ocr_line.base_ground_truth_text.split(" ")
-        )
+        if self._current_ocr_line.base_ground_truth_text:
+            ground_truth_tuple = tuple(
+                self._current_ocr_line.base_ground_truth_text.split(" ")
+            )
+        else:
+            ground_truth_tuple = tuple([])
 
         update_line_with_ground_truth(
             self._current_ocr_line,
@@ -873,7 +873,7 @@ class IpynbLineEditor:
             self.page_image_change_callback()
 
         self.task_type = EditorTaskType.NONE
-        self.task_match_idx = None
+        self.task_match_idx = -1
         self.split_task_x_coordinate = -1
         self.split_task_image_width = -1
 
@@ -1077,6 +1077,8 @@ class IpynbLineEditor:
             return
 
         logger.debug("Setting line_editor_validated to True")
+        if self._current_ocr_line.additional_block_attributes is None:
+            self._current_ocr_line.additional_block_attributes = {}
         self._current_ocr_line.additional_block_attributes["line_editor_validated"] = (
             True
         )
@@ -1095,12 +1097,13 @@ class IpynbLineEditor:
             self._current_ocr_line.remove_item(word)
             self._current_ocr_page.remove_empty_items()
         else:
-            self._current_ocr_line.unmatched_ground_truth_words = [
-                unmatched_gt_word
-                for unmatched_gt_word in self._current_ocr_line.unmatched_ground_truth_words
-                if unmatched_gt_word[0] != match["word_idx"]
-                and unmatched_gt_word[1] != match["gt_text"]
-            ]
+            if self._current_ocr_line.unmatched_ground_truth_words:
+                self._current_ocr_line.unmatched_ground_truth_words = [
+                    unmatched_gt_word
+                    for unmatched_gt_word in self._current_ocr_line.unmatched_ground_truth_words
+                    if unmatched_gt_word[0] != match["word_idx"]
+                    and unmatched_gt_word[1] != match["gt_text"]
+                ]
         self.redraw_ui()
         if self.page_image_change_callback:
             self.page_image_change_callback()

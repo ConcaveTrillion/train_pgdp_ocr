@@ -1,9 +1,9 @@
-import pathlib
 from enum import Enum
 from logging import DEBUG as logging_DEBUG
 from logging import getLogger
+from typing import Callable, Optional
 
-from ipywidgets import Layout, RadioButtons, VBox
+from ipywidgets import Layout, RadioButtons, VBox, Button
 
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.pgdp.pgdp_results import PGDPPage
@@ -26,30 +26,31 @@ class IpynbPageEditor:
     UI for adding/removing lines within in a page
     """
 
-    line_matching_configuration: LineMatching.SHOW_ALL_LINES
-
     _current_pgdp_page: PGDPPage | None
     _current_ocr_page: Page | None
 
-    page_image_change_callback: callable = None
+    line_matching_configuration: LineMatching = LineMatching.SHOW_ALL_LINES
+
+    page_image_change_callback: Optional[Callable] = None
 
     line_editors: list[IpynbLineEditor]
 
     def _observe_show_exact_line_matches(self, change=None):
-        logger.debug(f"Radio Button Changed: {str(change)}")
+        ui_logger.debug(f"Radio Button Changed: {str(change)}")
         if change is None or change["type"] != "change":
-            logger.debug("Not a change event.")
+            ui_logger.debug("Not a change event.")
             return
         if change["name"] != "value":
-            logger.debug("Not a 'value' change event.")
+            ui_logger.debug("Not a 'value' change event.")
             return
         if change["new"] is None:
-            logger.debug("New value is None.")
+            ui_logger.debug("New value is None.")
             return
         if change["new"] == self.line_matching_configuration.value:
-            logger.debug("New value is the same as the old value.")
+            ui_logger.debug("New value is the same as the old value.")
             return
 
+        ui_logger.debug(f"Changing line matching configuration to: {change['new']}")
         self.line_matching_configuration = change["new"]
         self.rebuild_content_ui()
 
@@ -61,17 +62,6 @@ class IpynbPageEditor:
     editor_line_matching_vbox: VBox
 
     monospace_font_name: str
-    monospace_font_path: pathlib.Path
-
-    def init_font(
-        self,
-        monospace_font_name: str,
-        monospace_font_path: pathlib.Path | str,
-    ):
-        self.monospace_font_name = monospace_font_name
-        if isinstance(monospace_font_path, str):
-            monospace_font_path = pathlib.Path(monospace_font_path)
-        self.monospace_font_path = monospace_font_path
 
     def init_header_ui(self):
         self.editor_line_matching_vbox_header = VBox()
@@ -98,13 +88,17 @@ class IpynbPageEditor:
             handler=self._observe_show_exact_line_matches,
         )
 
-        editor_line_matching_vbox_header_children = [
+        self.expand_all_page_bboxes = Button(
+            description="Expand Page BBoxes",
+        )
+
+        self.refine_all_page_bboxes = Button(
+            description="Refine Page BBoxes",
+        )
+
+        self.editor_line_matching_vbox_header.children = [
             self.show_exact_line_matches_radiobuttons,
         ]
-
-        self.editor_line_matching_vbox_header.children = (
-            editor_line_matching_vbox_header_children
-        )
 
     def init_footer_ui(self):
         self.editor_line_matching_vbox_footer = VBox()
@@ -141,14 +135,13 @@ class IpynbPageEditor:
         current_pgdp_page: PGDPPage | None,
         current_ocr_page: Page | None,
         monospace_font_name: str = "Courier New",
-        monospace_font_path: pathlib.Path | str = None,
-        page_image_change_callback: callable = None,
+        page_image_change_callback: Optional[Callable] = None,
     ):
         self.line_matching_configuration = LineMatching.SHOW_ALL_LINES
         # self.show_exact_line_matches = False
         self._current_pgdp_page = current_pgdp_page
         self._current_ocr_page = current_ocr_page
-        self.init_font(monospace_font_name, monospace_font_path)
+        self.monospace_font_name = monospace_font_name
         self.init_ui()
         self.page_image_change_callback = page_image_change_callback
 
@@ -167,18 +160,18 @@ class IpynbPageEditor:
         logger.debug("Regenerating line editors")
 
         self.line_editors = []
-        for line in self._current_ocr_page.lines:
-            logger.debug("Creating line editor for line: " + str(line.text[:20]))
-            line_editor = IpynbLineEditor(
-                page=self._current_ocr_page,
-                pgdp_page=self._current_pgdp_page,
-                line=line,
-                page_image_change_callback=self.page_image_change_callback,
-                line_change_callback=self.line_change_callback,
-                monospace_font_name=self.monospace_font_name,
-                monospace_font_path=self.monospace_font_path,
-            )
-            self.line_editors.append(line_editor)
+        if self._current_ocr_page and self._current_pgdp_page:
+            for line in self._current_ocr_page.lines:
+                logger.debug("Creating line editor for line: " + str(line.text[:20]))
+                line_editor = IpynbLineEditor(
+                    page=self._current_ocr_page,
+                    pgdp_page=self._current_pgdp_page,
+                    line=line,
+                    page_image_change_callback=self.page_image_change_callback,
+                    line_change_callback=self.line_change_callback,
+                    monospace_font_name=self.monospace_font_name,
+                )
+                self.line_editors.append(line_editor)
 
         if logger.level == logging_DEBUG:
             logger.debug(lambda s: "Line editor count: " + str(len(self.line_editors)))
@@ -216,6 +209,8 @@ class IpynbPageEditor:
                 # Skip exact matches
                 continue
 
+            if not line.additional_block_attributes:
+                line.additional_block_attributes = {}
             if (
                 self.line_matching_configuration
                 == LineMatching.SHOW_ONLY_UNVALIDATED_MISMATCHES
