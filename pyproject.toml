@@ -25,3 +25,6 @@ dependencies = [
 
 [tool.uv.sources]
 pd-book-tools = { path = "../pd-book-tools", editable = true }
+
+[tool.uv]
+config-settings = { editable_mode = "compat" }

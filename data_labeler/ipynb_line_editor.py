@@ -180,7 +180,10 @@ class IpynbLineEditor:
         self.LineImageHBox = HBox()
         self.LineImageHBox.layout = self.basic_box_layout
         if self._current_ocr_line.bounding_box:
-            if self._current_ocr_page.cv2_numpy_page_image is not None and self._current_ocr_line.bounding_box:
+            if (
+                self._current_ocr_page.cv2_numpy_page_image is not None
+                and self._current_ocr_line.bounding_box
+            ):
                 cropped_line_image_html = get_html_widget_from_cropped_image(
                     self._current_ocr_page.cv2_numpy_page_image,
                     self._current_ocr_line.bounding_box,
@@ -498,6 +501,8 @@ class IpynbLineEditor:
 
     def get_edit_bbox(self):
         ui_logger.debug("Getting edit bbox image.")
+        if not self._current_ocr_page.cv2_numpy_page_image:
+            raise ValueError("Current OCR page does not have a valid image.")
         img_ndarray = self._current_ocr_page.cv2_numpy_page_image
 
         ui_logger.debug("Getting bounding box.")
@@ -527,6 +532,8 @@ class IpynbLineEditor:
         return edit_bbox_scaled
 
     def get_edit_bbox_image_html_widget(self):
+        if not self._current_ocr_page.cv2_numpy_page_image:
+            raise ValueError("Current OCR page does not have a valid image.")
         img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
         modified_bbox = self.get_edit_bbox()
 
@@ -570,6 +577,8 @@ class IpynbLineEditor:
         return
 
     def edit_bbox_refine(self):
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
         img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
         h, w = img_ndarray.shape[:2]
 
@@ -604,15 +613,20 @@ class IpynbLineEditor:
 
     def edit_bbox_crop(self, crop: str):
         ui_logger.debug(f"Cropping edit bbox with crop type: {crop}.")
+        if crop not in ["T", "B", "A"]:
+            raise ValueError("Invalid crop type. Use 'T', 'B', or 'A'.")
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
         img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
         h, w = img_ndarray.shape[:2]
-        
+
         modified_bbox = self.get_edit_bbox()
         ui_logger.debug("Normalizing bbox.")
         normalized_modified_bbox = modified_bbox.normalize(w, h)
         ui_logger.debug(f"Normalized Edit bbox: {normalized_modified_bbox.to_ltrb()}")
 
         ui_logger.debug("Cropping bbox.")
+        normalized_refined_bbox = normalized_modified_bbox
         # crop: 'T' for top, 'B' for bottom, 'A' for all
         if crop in ["T", "A"]:
             normalized_refined_bbox: BoundingBox = normalized_modified_bbox.crop_top(
@@ -626,7 +640,6 @@ class IpynbLineEditor:
         ui_logger.debug(
             f"Cropped Edit bounding box: {normalized_refined_bbox.to_ltrb()}"
         )
-
 
         self.update_edit_bbox_image()
         return
@@ -720,7 +733,12 @@ class IpynbLineEditor:
         )
         EditBBoxCropAllButton.on_click(lambda _: self.edit_bbox_crop(crop="A"))
 
-        return [EditBboxCropLabel, EditBBoxCropTopButton, EditBBoxCropBottomButton, EditBBoxCropAllButton]
+        return [
+            EditBboxCropLabel,
+            EditBBoxCropTopButton,
+            EditBBoxCropBottomButton,
+            EditBBoxCropAllButton,
+        ]
 
     def draw_ui_edit_bbox_task(self):
         self.EditBboxImageHBox = HBox()
@@ -741,9 +759,12 @@ class IpynbLineEditor:
         )
         self.EditBBoxRefineButton.on_click(lambda _: self.edit_bbox_refine())
 
-
         self.EditVBoxLine1 = HBox(
-            [self.CancelEditBBoxButton, self.EditBBoxRefineButton, *self.get_ui_edit_bbox_crop_buttons()]
+            [
+                self.CancelEditBBoxButton,
+                self.EditBBoxRefineButton,
+                *self.get_ui_edit_bbox_crop_buttons(),
+            ]
         )
         self.EditVBoxLine2 = HBox(self.get_ui_edit_bbox_margin_buttons("L"))
         self.EditVBoxLine3 = HBox(self.get_ui_edit_bbox_margin_buttons("T"))
@@ -816,6 +837,9 @@ class IpynbLineEditor:
     def execute_edit_bbox_task(self):
         ui_logger.debug("Executing edit bbox task.")
 
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
+
         # Get the match
         match = self.line_matches[self.task_match_idx]
         word: Word = match["word"]
@@ -867,6 +891,9 @@ class IpynbLineEditor:
 
     def execute_split(self):
         ui_logger.debug("Executing split task.")
+
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
 
         # Get the match
         match = self.line_matches[self.task_match_idx]
@@ -1233,6 +1260,9 @@ class IpynbLineEditor:
                 self.page_image_change_callback()
 
     def calculate_line_matches(self):
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
+
         matches = []
 
         logger.debug(

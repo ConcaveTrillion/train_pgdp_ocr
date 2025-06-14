@@ -6,7 +6,6 @@ from textwrap import dedent
 from typing import Optional
 
 import cv2
-import torch
 from IPython.display import display
 from ipywidgets import (
     HTML,
@@ -21,14 +20,6 @@ from ipywidgets import (
 
 from shutil import copyfile
 
-from doctr.io import DocumentFile
-from doctr.models import (
-    crnn_vgg16_bn,
-    db_resnet50,
-    detection_predictor,
-    ocr_predictor,
-    recognition_predictor,
-)
 from doctr.models.predictor.pytorch import OCRPredictor
 
 from pd_book_tools.image_processing.cv2_processing.encoding import (
@@ -37,8 +28,7 @@ from pd_book_tools.image_processing.cv2_processing.encoding import (
 from pd_book_tools.ocr.document import Document
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.pgdp.pgdp_results import PGDPExport, PGDPPage
-from pd_book_tools.ocr.cv2_doctr import doctr_ocr_cv2_image
-from pd_book_tools.ocr.cv2_doctr_pytorch import get_finetuned_torch_doctr_predictor
+from pd_book_tools.ocr.cv2_doctr import doctr_ocr_cv2_image, get_default_doctr_predictor
 
 
 from .ipynb_page_editor import IpynbPageEditor
@@ -406,37 +396,7 @@ class IpynbLabeler:
             return
 
         # Otherwise, use the default doctr models (not fine-tuned)
-        # Check if GPU is available
-        device, _ = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Using {device} for OCR")
-
-        det_model = db_resnet50(pretrained=True).to(device)
-        reco_model = crnn_vgg16_bn(pretrained=True, pretrained_backbone=True).to(device)
-
-        # We're going to use pytorch but for some reason it infers the tensorflow predictor
-        full_predictor: OCRPredictor = ocr_predictor(
-            det_arch=det_model,
-            reco_arch=reco_model,
-            pretrained=True,
-            assume_straight_pages=True,
-            disable_crop_orientation=True,
-        )  # type: ignore[assignment]
-
-        det_predictor = detection_predictor(
-            arch=det_model,
-            pretrained=True,
-            assume_straight_pages=True,
-        )
-
-        reco_predictor = recognition_predictor(
-            arch=reco_model,
-            pretrained=True,
-        )
-
-        full_predictor.det_predictor = det_predictor
-        full_predictor.reco_predictor = reco_predictor
-
-        self.main_ocr_predictor = full_predictor
+        self.main_ocr_predictor = get_default_doctr_predictor() # type: ignore[assignment]
 
     def create_path(self, str_or_path: pathlib.Path | str) -> pathlib.Path:
         if isinstance(str_or_path, str):
@@ -675,6 +635,10 @@ class IpynbLabeler:
     def reload_page_images_ui(self):
         logger.debug(f"Reloading page images for page index: {self.current_page_idx}")
         ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
+        if not ocr_page.cv2_numpy_page_image:
+            raise ValueError(
+                "Current OCR page does not have a valid image."
+            )
         self.matched_ocr_pages[self.current_page_idx] = {
             **self.matched_ocr_pages[self.current_page_idx],
             "width": ocr_page.cv2_numpy_page_image.shape[1],
@@ -682,16 +646,16 @@ class IpynbLabeler:
             "page_image": encode_bgr_image_as_png(ocr_page.cv2_numpy_page_image),
             "ocr_image_words_bounding_box": encode_bgr_image_as_png(
                 ocr_page.cv2_numpy_page_image_word_with_bboxes
-            ),
+            ) if ocr_page.cv2_numpy_page_image_word_with_bboxes is not None else None,
             "ocr_image_mismatches": encode_bgr_image_as_png(
                 ocr_page.cv2_numpy_page_image_matched_word_with_colors
-            ),
+            ) if ocr_page.cv2_numpy_page_image_matched_word_with_colors is not None else None,
             "ocr_image_lines_bounding_box": encode_bgr_image_as_png(
                 ocr_page.cv2_numpy_page_image_line_with_bboxes
-            ),
+            ) if ocr_page.cv2_numpy_page_image_line_with_bboxes is not None else None,
             "ocr_image_pgh_bounding_box": encode_bgr_image_as_png(
                 ocr_page.cv2_numpy_page_image_paragraph_with_bboxes
-            ),
+            ) if ocr_page.cv2_numpy_page_image_paragraph_with_bboxes is not None else None,
         }
 
     def expand_and_refine_all_bboxes(self):
@@ -703,6 +667,10 @@ class IpynbLabeler:
             logger.debug(
                 f"Refining word bounding box for word: {word.text} with bbox: {word.bounding_box}"
             )
+            if ocr_page.cv2_numpy_page_image is None:
+                raise ValueError(
+                    "Current OCR page does not have a valid image to refine bounding boxes."
+                )
             word.bounding_box = word.bounding_box.crop_bottom(
                 image=ocr_page.cv2_numpy_page_image
             )
