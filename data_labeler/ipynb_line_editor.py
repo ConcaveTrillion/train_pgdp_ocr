@@ -3,11 +3,11 @@ from logging import getLogger
 from typing import Callable, Optional
 
 from cv2 import line as cv2_line
-from ipywidgets import HTML, Button, HBox, Layout, Text, VBox
+from ipywidgets import HTML, Button, HBox, Layout, Text, VBox, Label
 from ipywidgets import Image as ipywidgets_Image
 from numpy import ndarray  # GridBox,
 
-from pd_book_tools.geometry import BoundingBox
+from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.ocr.block import Block
 from pd_book_tools.ocr.ground_truth_matching import update_line_with_ground_truth
 from pd_book_tools.ocr.image_utilities import (
@@ -180,11 +180,12 @@ class IpynbLineEditor:
         self.LineImageHBox = HBox()
         self.LineImageHBox.layout = self.basic_box_layout
         if self._current_ocr_line.bounding_box:
-            cropped_line_image_html = get_html_widget_from_cropped_image(
-                self._current_ocr_page.cv2_numpy_page_image,
-                self._current_ocr_line.bounding_box,
-            )
-            self.LineImageHBox.children = [cropped_line_image_html]
+            if self._current_ocr_page.cv2_numpy_page_image is not None and self._current_ocr_line.bounding_box:
+                cropped_line_image_html = get_html_widget_from_cropped_image(
+                    self._current_ocr_page.cv2_numpy_page_image,
+                    self._current_ocr_line.bounding_box,
+                )
+                self.LineImageHBox.children = [cropped_line_image_html]
         else:
             ui_logger.warning("Line bounding box is not set. Cannot draw line image.")
             self.LineImageHBox.children = [
@@ -497,7 +498,7 @@ class IpynbLineEditor:
 
     def get_edit_bbox(self):
         ui_logger.debug("Getting edit bbox image.")
-        img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
+        img_ndarray = self._current_ocr_page.cv2_numpy_page_image
 
         ui_logger.debug("Getting bounding box.")
         # Get the bounding box of the word
@@ -601,6 +602,35 @@ class IpynbLineEditor:
         self.update_edit_bbox_image()
         return
 
+    def edit_bbox_crop(self, crop: str):
+        ui_logger.debug(f"Cropping edit bbox with crop type: {crop}.")
+        img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
+        h, w = img_ndarray.shape[:2]
+        
+        modified_bbox = self.get_edit_bbox()
+        ui_logger.debug("Normalizing bbox.")
+        normalized_modified_bbox = modified_bbox.normalize(w, h)
+        ui_logger.debug(f"Normalized Edit bbox: {normalized_modified_bbox.to_ltrb()}")
+
+        ui_logger.debug("Cropping bbox.")
+        # crop: 'T' for top, 'B' for bottom, 'A' for all
+        if crop in ["T", "A"]:
+            normalized_refined_bbox: BoundingBox = normalized_modified_bbox.crop_top(
+                img_ndarray
+            )
+        if crop in ["B", "A"]:
+            normalized_refined_bbox: BoundingBox = normalized_modified_bbox.crop_bottom(
+                img_ndarray
+            )
+
+        ui_logger.debug(
+            f"Cropped Edit bounding box: {normalized_refined_bbox.to_ltrb()}"
+        )
+
+
+        self.update_edit_bbox_image()
+        return
+
     def get_ui_edit_bbox_margin_buttons(self, margin: str):
         ui_logger.debug(f"Drawing UI for edit bbox {margin} margin buttons.")
 
@@ -660,6 +690,38 @@ class IpynbLineEditor:
             EditBboxMarginAdjustRight,
         ]
 
+    def get_ui_edit_bbox_crop_buttons(self):
+        ui_logger.debug("Drawing UI for edit bbox crop buttons.")
+
+        EditBboxCropLabel = Label(
+            value="Autocrop:",
+            layout=Layout(
+                width="100%",
+                margin="0px 2px 0px 2px",
+                padding="1px",
+            ),
+        )
+
+        EditBBoxCropTopButton = Button(
+            description="T",
+            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBBoxCropTopButton.on_click(lambda _: self.edit_bbox_crop(crop="T"))
+
+        EditBBoxCropBottomButton = Button(
+            description="B",
+            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBBoxCropBottomButton.on_click(lambda _: self.edit_bbox_crop(crop="B"))
+
+        EditBBoxCropAllButton = Button(
+            description="A",
+            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+        )
+        EditBBoxCropAllButton.on_click(lambda _: self.edit_bbox_crop(crop="A"))
+
+        return [EditBboxCropLabel, EditBBoxCropTopButton, EditBBoxCropBottomButton, EditBBoxCropAllButton]
+
     def draw_ui_edit_bbox_task(self):
         self.EditBboxImageHBox = HBox()
         self.EditBboxImageHBox.layout = Layout(margin="0px 0px 10px 0px")
@@ -679,8 +741,9 @@ class IpynbLineEditor:
         )
         self.EditBBoxRefineButton.on_click(lambda _: self.edit_bbox_refine())
 
+
         self.EditVBoxLine1 = HBox(
-            [self.CancelEditBBoxButton, self.EditBBoxRefineButton]
+            [self.CancelEditBBoxButton, self.EditBBoxRefineButton, *self.get_ui_edit_bbox_crop_buttons()]
         )
         self.EditVBoxLine2 = HBox(self.get_ui_edit_bbox_margin_buttons("L"))
         self.EditVBoxLine3 = HBox(self.get_ui_edit_bbox_margin_buttons("T"))

@@ -37,6 +37,9 @@ from pd_book_tools.image_processing.cv2_processing.encoding import (
 from pd_book_tools.ocr.document import Document
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.pgdp.pgdp_results import PGDPExport, PGDPPage
+from pd_book_tools.ocr.cv2_doctr import doctr_ocr_cv2_image
+from pd_book_tools.ocr.cv2_doctr_pytorch import get_finetuned_torch_doctr_predictor
+
 
 from .ipynb_page_editor import IpynbPageEditor
 
@@ -733,18 +736,26 @@ class IpynbLabeler:
         ):
             source_image = self.current_pgdp_page.png_full_path
 
-            doctr_image = DocumentFile.from_images(source_image)
-            doctr_result = self.main_ocr_predictor(doctr_image)
-            docTR_output = doctr_result.export()
-
-            ocr_document = Document.from_doctr_output(docTR_output, source_image)
+            cv2_numpy_image = cv2.imread(str(source_image.resolve()))
 
             # Always 1 page per OCR in this case
-            ocr_page: Page = ocr_document.pages[0]
+            ocr_page: Page = doctr_ocr_cv2_image(
+                image=cv2_numpy_image,
+                source_image=str(source_image),
+                predictor=self.main_ocr_predictor,
+            )
             ocr_page.cv2_numpy_page_image = cv2.imread(str(source_image.resolve()))
 
+            ui_logger.debug(
+                f"OCR Completed. Page text length: {len(ocr_page.text)} characters."
+            )
+
             ocr_page.reorganize_page()
+
+            ui_logger.debug("OCR Reorganized.")
+
             ocr_page.add_ground_truth(self.current_pgdp_page.processed_page_text)
+            ui_logger.debug("Ground Truth Added.")
 
             self.matched_ocr_pages[self.current_page_idx] = {
                 "page": ocr_page,

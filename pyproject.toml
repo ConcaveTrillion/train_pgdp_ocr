@@ -5,13 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "hatchling>=1.27.0",
     "ipykernel",
     "ipywidgets",
     "isort>=6.0",
     "jupyter>=1.1.1",
     "jupyterlab>=4.0",
     "matplotlib>=3.10.1",
-    "pd-book-tools",
+    "pd-book-tools[tesseract,torch]",
     "pre-commit>=4.2.0",
     "pytest>=8.3",
     "python-doctr>=0.11.1a0",
@@ -24,6 +25,3 @@ dependencies = [
 
 [tool.uv.sources]
 pd-book-tools = { path = "../pd-book-tools", editable = true }
-
-[tool.setuptools.packages.find]
-include = ["data_labeler"]
