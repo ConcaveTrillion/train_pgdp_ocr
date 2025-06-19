@@ -3,6 +3,9 @@ Add button to refresh page images
 Add button to refresh all line images
 Add button to do 'crop bottom' and 'crop top' and 'crop both' in edit box
 
+Add button to 'rematch ground truth to current OCR'
+
+Add way to tag italic and small caps text (for future classification?)
 
 Interesting pages which need more OCR processing work to properly match:
 

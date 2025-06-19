@@ -217,6 +217,26 @@ class IpynbLabeler:
         )
         self.refine_all_bboxes_button.on_click(lambda event: self.refine_all_bboxes())
 
+        self.refresh_page_images_button = Button(
+            description="Refresh Page Images",
+        )
+        self.refresh_page_images_button.layout = Layout(
+            width="auto",
+        )
+        self.refresh_page_images_button.on_click(
+            lambda event: self.refresh_page_images()
+        )
+
+        self.refresh_all_line_images_button = Button(
+            description="Refresh All Line Images",
+        )
+        self.refresh_all_line_images_button.layout = Layout(
+            width="auto",
+        )
+        self.refresh_all_line_images_button.on_click(
+            lambda event: self.refresh_all_line_images()
+        )
+
         self.header_box = VBox(
             [
                 HBox(
@@ -242,6 +262,8 @@ class IpynbLabeler:
                     [
                         self.expand_and_refine_all_bboxes_button,
                         self.refine_all_bboxes_button,
+                        self.refresh_page_images_button,
+                        self.refresh_all_line_images_button,
                     ]
                 ),
             ]
@@ -635,7 +657,7 @@ class IpynbLabeler:
     def reload_page_images_ui(self):
         logger.debug(f"Reloading page images for page index: {self.current_page_idx}")
         ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
-        if not ocr_page.cv2_numpy_page_image:
+        if ocr_page.cv2_numpy_page_image is None:
             raise ValueError(
                 "Current OCR page does not have a valid image."
             )
@@ -657,6 +679,30 @@ class IpynbLabeler:
                 ocr_page.cv2_numpy_page_image_paragraph_with_bboxes
             ) if ocr_page.cv2_numpy_page_image_paragraph_with_bboxes is not None else None,
         }
+
+    def refresh_page_images(self):
+        """Refresh the page images for the current page."""
+        ui_logger.debug(f"Refreshing page images for page index: {self.current_page_idx}")
+        ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
+        
+        # Regenerate all the page images with bounding boxes
+        ocr_page.refresh_page_images()
+        
+        # Update the UI with the new images
+        self.reload_page_images_ui()
+        self.update_images()
+
+    def refresh_all_line_images(self):
+        """Refresh all line images for the current page."""
+        ui_logger.debug(f"Refreshing all line images for page index: {self.current_page_idx}")
+        # TODO
+        # iterate over the line editors and have them regenerate their images
+        ocr_page: Page = self.matched_ocr_pages[self.current_page_idx]["page"]
+        if ocr_page.cv2_numpy_page_image is None:
+            raise ValueError(
+                "Current OCR page does not have a valid image to refresh line images."
+            )
+        
 
     def expand_and_refine_all_bboxes(self):
         """Expand the bounding boxes of all words in the current OCR page."""

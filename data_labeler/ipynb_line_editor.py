@@ -501,7 +501,7 @@ class IpynbLineEditor:
 
     def get_edit_bbox(self):
         ui_logger.debug("Getting edit bbox image.")
-        if not self._current_ocr_page.cv2_numpy_page_image:
+        if self._current_ocr_page.cv2_numpy_page_image is None:
             raise ValueError("Current OCR page does not have a valid image.")
         img_ndarray = self._current_ocr_page.cv2_numpy_page_image
 
@@ -532,7 +532,7 @@ class IpynbLineEditor:
         return edit_bbox_scaled
 
     def get_edit_bbox_image_html_widget(self):
-        if not self._current_ocr_page.cv2_numpy_page_image:
+        if self._current_ocr_page.cv2_numpy_page_image is None:
             raise ValueError("Current OCR page does not have a valid image.")
         img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
         modified_bbox = self.get_edit_bbox()
@@ -626,20 +626,33 @@ class IpynbLineEditor:
         ui_logger.debug(f"Normalized Edit bbox: {normalized_modified_bbox.to_ltrb()}")
 
         ui_logger.debug("Cropping bbox.")
-        normalized_refined_bbox = normalized_modified_bbox
+        normalized_cropped_bbox = normalized_modified_bbox
         # crop: 'T' for top, 'B' for bottom, 'A' for all
         if crop in ["T", "A"]:
-            normalized_refined_bbox: BoundingBox = normalized_modified_bbox.crop_top(
+            normalized_cropped_bbox: BoundingBox = normalized_cropped_bbox.crop_top(
                 img_ndarray
             )
         if crop in ["B", "A"]:
-            normalized_refined_bbox: BoundingBox = normalized_modified_bbox.crop_bottom(
+            normalized_cropped_bbox: BoundingBox = normalized_cropped_bbox.crop_bottom(
                 img_ndarray
             )
 
         ui_logger.debug(
-            f"Cropped Edit bounding box: {normalized_refined_bbox.to_ltrb()}"
+            f"Cropped Edit bounding box: {normalized_cropped_bbox.to_ltrb()}"
         )
+
+        cropped_bbox = normalized_cropped_bbox.scale(w, h)
+        ui_logger.debug(f"Scaled Cropped Edit bounding box: {cropped_bbox.to_ltrb()}")
+
+        ui_logger.debug(f"Edit Margins Before refinement: {self.edit_margins}")
+
+        self.edit_margins = [
+            self.edit_margins[0] + int(cropped_bbox.minX - modified_bbox.minX),
+            self.edit_margins[1] + int(cropped_bbox.minY - modified_bbox.minY),
+            self.edit_margins[2] + int(cropped_bbox.maxX - modified_bbox.maxX),
+            self.edit_margins[3] + int(cropped_bbox.maxY - modified_bbox.maxY),
+        ]
+        ui_logger.debug(f"Edit Margins after refinement: {self.edit_margins}")
 
         self.update_edit_bbox_image()
         return
@@ -706,35 +719,25 @@ class IpynbLineEditor:
     def get_ui_edit_bbox_crop_buttons(self):
         ui_logger.debug("Drawing UI for edit bbox crop buttons.")
 
-        EditBboxCropLabel = Label(
-            value="Autocrop:",
-            layout=Layout(
-                width="100%",
-                margin="0px 2px 0px 2px",
-                padding="1px",
-            ),
-        )
-
         EditBBoxCropTopButton = Button(
-            description="T",
-            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+            description="CT",
+            layout=Layout(margin="0px 2px 0px 2px", padding="1px"),
         )
         EditBBoxCropTopButton.on_click(lambda _: self.edit_bbox_crop(crop="T"))
 
         EditBBoxCropBottomButton = Button(
-            description="B",
-            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+            description="CB",
+            layout=Layout(margin="0px 2px 0px 2px", padding="1px"),
         )
         EditBBoxCropBottomButton.on_click(lambda _: self.edit_bbox_crop(crop="B"))
 
         EditBBoxCropAllButton = Button(
-            description="A",
-            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+            description="CT+CB",
+            layout=Layout(margin="0px 2px 0px 2px", padding="1px"),
         )
         EditBBoxCropAllButton.on_click(lambda _: self.edit_bbox_crop(crop="A"))
 
         return [
-            EditBboxCropLabel,
             EditBBoxCropTopButton,
             EditBBoxCropBottomButton,
             EditBBoxCropAllButton,
@@ -755,7 +758,7 @@ class IpynbLineEditor:
 
         self.EditBBoxRefineButton = Button(
             description="Refine",
-            layout=Layout(width="100%", margin="0px 2px 0px 2px", padding="1px"),
+            layout=Layout(margin="0px 2px 0px 2px", padding="1px"),
         )
         self.EditBBoxRefineButton.on_click(lambda _: self.edit_bbox_refine())
 
@@ -862,7 +865,9 @@ class IpynbLineEditor:
         normalized_modified_bbox = modified_bbox.normalize(w, h)
         # Set the bounding box of the word
         word.bounding_box = normalized_modified_bbox
-        ui_logger.debug(f"New bounding box set: {word.bounding_box.to_ltrb()}")
+        ui_logger.debug(
+            f"Normalized New bounding box set: {word.bounding_box.to_ltrb()}"
+        )
 
         # TODO maybe do this
         # Expand the word bounding boxes if they were shrunk too much or didn't include all the connected pixels
@@ -980,12 +985,14 @@ class IpynbLineEditor:
         ocr_HBox = HBox()
         gt_HBox = HBox()
         action_buttons_HBox = HBox()
+        crop_buttons_HBox = HBox()
 
         match_VBox.children = [
             image_HBox,
             ocr_HBox,
             gt_HBox,
             action_buttons_HBox,
+            crop_buttons_HBox,
         ]
 
         self.WordMatchingTableVBoxes.append(match_VBox)
@@ -1050,6 +1057,50 @@ class IpynbLineEditor:
             names="value",
         )
 
+    def load_word_crop_buttons(self, match):
+        """Load crop buttons for individual word bounding box modifications"""
+        logger.debug(f"Loading word crop buttons for match: {match['idx']}...")
+        crop_buttons_HBox = self.WordMatchingTableVBoxes[match["idx"]].children[4]
+        crop_buttons_HBox_children = []
+
+        if self.task_type != EditorTaskType.NONE:
+            ui_logger.debug(
+                f"Task is active: {self.task_type.name}. No crop buttons will be displayed."
+            )
+            # If an editor task is active, don't display crop buttons
+            crop_buttons_HBox.children = []
+            return
+
+        word = match["word"]
+        if word:
+            # Add crop buttons for quick bounding box modifications
+            crop_top_button = Button(
+                description="CT",
+                layout=Layout(width="22px", padding="0px", margin="0px 1px"),
+                tooltip="Crop Top",
+            )
+            crop_top_button.on_click(lambda _, m=match: self.crop_word_top(m))
+            crop_buttons_HBox_children.append(crop_top_button)
+
+            crop_bottom_button = Button(
+                description="CB",
+                layout=Layout(width="22px", padding="0px", margin="0px 1px"),
+                tooltip="Crop Bottom",
+            )
+            crop_bottom_button.on_click(lambda _, m=match: self.crop_word_bottom(m))
+            crop_buttons_HBox_children.append(crop_bottom_button)
+
+            crop_both_button = Button(
+                description="CA",
+                layout=Layout(width="22px", padding="0px", margin="0px 1px"),
+                tooltip="Crop All (Top and Bottom)",
+            )
+            crop_both_button.on_click(lambda _, m=match: self.crop_word_both(m))
+            crop_buttons_HBox_children.append(crop_both_button)
+
+        crop_buttons_HBox.children = crop_buttons_HBox_children
+        crop_buttons_HBox.layout = Layout(flex_wrap="wrap")
+
     def load_word_action_buttons(self, match):
         logger.debug(f"Loading word action buttons for match: {match['idx']}...")
         action_buttons_HBox = self.WordMatchingTableVBoxes[match["idx"]].children[3]
@@ -1101,19 +1152,6 @@ class IpynbLineEditor:
             split_button.on_click(lambda _: self.start_split_task(match))
             action_buttons_HBox_children.append(split_button)
 
-            # Split (One Active Split/Edit Per Line):
-            # <Image with Vertical Red Line>
-            # <Adjust Split Left 1%> <Adjust Split Left 10%> <Adjust Split Right 1%> <Adjust Split Right 10%> <Split OK>
-
-            # Edit Bounding Box (One Active Split/Edit Per Line):
-            # <Padded Image with Red Bounding Box>
-            # <Adjust Left 1%> <Adjust Left 10%>
-            # <Adjust Top 1%> <Adjust Top 10%>
-            # <Adjust Right 1%> <Adjust Right 10%>
-            # <Adjust Bottom 1%> <Adjust Bottom 10%>
-            # <Shrink to Fit>
-            # <Edit OK>
-
         action_buttons_HBox.children = action_buttons_HBox_children
         action_buttons_HBox.layout = Layout(flex_wrap="wrap")
 
@@ -1121,6 +1159,7 @@ class IpynbLineEditor:
         self.load_word_match_image(match)
         self.load_word_match_text(match)
         self.load_word_action_buttons(match)
+        self.load_word_crop_buttons(match)
 
     def draw_ui_word_matching_table(self):
         ui_logger.debug("Drawing UI for word matching table.")
@@ -1234,16 +1273,54 @@ class IpynbLineEditor:
             self.page_image_change_callback()
 
     def merge_left(self, match):
-        word: Word = match["word"]
-        word_idx = match["word_idx"]
+        prev_match_idx = self.line_matches.index(match) - 1
+        if prev_match_idx < 0:
+            logger.debug("No previous match to merge with.")
+            return
+        prev_match = self.line_matches[prev_match_idx]
+
         # Merge the word with the previous word
-        if word_idx > 0:
-            prev_word: Word = self._current_ocr_line.items[word_idx - 1]
+        if match["word"] and prev_match["word"]:
+            word: Word = match["word"]
+            prev_word: Word = prev_match["word"]
             prev_word.merge(word)
+            self.line_matches.remove(match)
             self._current_ocr_line.remove_item(word)
             self.redraw_ui()
             if self.page_image_change_callback:
                 self.page_image_change_callback()
+
+        elif not match["word"] and prev_match["word"]:
+            logger.debug(
+                "Current word is not an OCR word, merging current ground truth word into OCR word"
+            )
+            gt_text = match["gt_text"]
+            prev_word: Word = prev_match["word"]
+            prev_word.ground_truth_text = f"{prev_word.ground_truth_text}{gt_text}"
+            prev_word.ground_truth_match_keys["match_score"] = (
+                prev_word.fuzz_score_against(prev_word.ground_truth_text)
+            )
+            self.line_matches.remove(match)
+            if self._current_ocr_line.unmatched_ground_truth_words:
+                self._current_ocr_line.unmatched_ground_truth_words.remove(
+                    (match["word_idx"], gt_text)
+                )
+        else:
+            # merge unmatched ground truth together
+            logger.debug(
+                "Current and previos words are not OCR words, merging current ground truth into previous ground truth"
+            )
+            gt_text = match["gt_text"]
+            prev_match["gt_text"] = f"{prev_match['gt_text']}{gt_text}"
+            self.line_matches.remove(match)
+            if self._current_ocr_line.unmatched_ground_truth_words:
+                self._current_ocr_line.unmatched_ground_truth_words.remove(
+                    (match["word_idx"], gt_text)
+                )
+
+        self.redraw_ui()
+        if self.page_image_change_callback:
+            self.page_image_change_callback()
 
     def merge_right(self, match):
         word: Word = match["word"]
@@ -1345,3 +1422,86 @@ class IpynbLineEditor:
         self.line_matches = matches
 
         logger.debug(f"Line matching complete: {self._current_ocr_line.text[0:20]}...")
+
+    def crop_word_top(self, match):
+        """Crop the top of a word's bounding box"""
+        ui_logger.debug(f"Cropping top of word for match: {match['idx']}")
+        word = match["word"]
+        if not word:
+            ui_logger.warning("No word found for crop operation")
+            return
+
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
+
+        img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
+
+        word.crop_top(img_ndarray)
+
+        self._current_ocr_line.recompute_bounding_box()
+        self._current_ocr_page.recompute_bounding_box()
+
+        # Refresh the display
+        self.redraw_ui()
+
+        # Trigger callbacks
+        if self.page_image_change_callback:
+            self.page_image_change_callback()
+        # if self.line_change_callback:
+        #     self.line_change_callback()
+
+    def crop_word_bottom(self, match):
+        """Crop the bottom of a word's bounding box"""
+        ui_logger.debug(f"Cropping bottom of word for match: {match['idx']}")
+        word = match["word"]
+        if not word:
+            ui_logger.warning("No word found for crop operation")
+            return
+
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
+
+        img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
+        word.crop_bottom(img_ndarray)
+
+        self._current_ocr_line.recompute_bounding_box()
+        self._current_ocr_page.recompute_bounding_box()
+
+        # Refresh the display
+        self.redraw_ui()
+
+        # Trigger callbacks
+        if self.page_image_change_callback:
+            self.page_image_change_callback()
+        # if self.line_change_callback:
+        #     self.line_change_callback()
+
+    def crop_word_both(self, match):
+        """Crop both top and bottom of a word's bounding box"""
+        ui_logger.debug(
+            f"Cropping both top and bottom of word for match: {match['idx']}"
+        )
+        word = match["word"]
+        if not word:
+            ui_logger.warning("No word found for crop operation")
+            return
+
+        if self._current_ocr_page.cv2_numpy_page_image is None:
+            raise ValueError("Current OCR page does not have a valid image.")
+
+
+        img_ndarray: ndarray = self._current_ocr_page.cv2_numpy_page_image
+        word.crop_top(img_ndarray)
+        word.crop_bottom(img_ndarray)
+
+        self._current_ocr_line.recompute_bounding_box()
+        self._current_ocr_page.recompute_bounding_box()
+
+        # Refresh the display
+        self.redraw_ui()
+
+        # Trigger callbacks
+        if self.page_image_change_callback:
+            self.page_image_change_callback()
+        # if self.line_change_callback:
+        #     self.line_change_callback()
