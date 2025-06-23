@@ -589,77 +589,98 @@ class NiceGuiLabeler:
                 font-family: '{self.monospace_font_name}', monospace !important;
                 font-size: 12px !important;
             }}
+            .q-page {{
+                padding: 0 !important;
+            }}
+            .q-toolbar {{
+                min-height: 0 !important;
+                padding: 0 !important;
+            }}
+            .q-row {{
+                margin-bottom: 2px !important;
+                margin-top: 0 !important;
+            }}
+            .q-btn {{
+                margin: 1px !important;
+            }}
+            .q-field {{
+                margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+            }}
+            .q-field__control {{
+                height: 32px !important;
+                min-height: 32px !important;
+            }}
         </style>
         """)
 
-        with ui.header():
-            ui.label("OCR Data Labeler").classes("text-h4")
 
-        # Navigation controls
-        with ui.row().classes("w-full gap-4 items-center p-4"):
-            ui.button("Previous", on_click=self.prev_page).props("flat")
-            self.current_page_display = ui.label(
-                f"Page {self.current_page_idx} of {self.total_pages}: {self.current_page_name}"
-            )
-            ui.button("Next", on_click=self.next_page).props("flat")
-            self.page_number_input = ui.number(
-                "Go to page",
-                value=self.current_page_idx,
-                min=0,
-                max=self.total_pages,
-                precision=0,
-            )
-            ui.button("Go", on_click=self.go_to_page).props("flat")
-
-        # Action buttons
-        with ui.row().classes("w-full gap-2 p-4"):
-            ui.button("Save OCR to File", on_click=self.export_ocr_document).props(
-                "outlined"
-            )
-            ui.button("Reload OCR from File", on_click=self.reload_ocr_from_file).props(
-                "outlined"
-            )
-            ui.button("Reset OCR", on_click=self.reset_ocr).props("outlined")
-            ui.button("Export Training Set", on_click=self.export_training).props(
-                "outlined color=green"
-            )
-            ui.button("Export Validation Set", on_click=self.export_validation).props(
-                "outlined color=blue"
-            )
-
-        # Additional action buttons
-        with ui.row().classes("w-full gap-2 p-4"):
-            ui.button(
-                "Expand & Refine All BBoxes", on_click=self.expand_and_refine_all_bboxes
-            ).props("outlined")
-            ui.button("Refine All BBoxes", on_click=self.refine_all_bboxes).props(
-                "outlined"
-            )
-            ui.button("Refresh Page Images", on_click=self.refresh_page_images).props(
-                "outlined"
-            )
-
-        # Project loading section (only show if source_pgdp_data_path is set)
-        if self.source_pgdp_data_path:
-            with ui.row().classes("w-full gap-2 p-4"):
-                ui.label("Load Project from Directory:").classes("text-sm")
-                self.project_selector = (
-                    ui.select(
-                        options=self.get_available_projects(),
-                        value=self.selected_project,
+        with ui.column().style('row-gap: 0.1rem'):
+            # Project loading section (only show if source_pgdp_data_path is set)
+            if self.source_pgdp_data_path:
+                with ui.row().classes("w-full gap-1 m-0 p-0"):
+                    ui.label("Load Project from Directory:").classes("text-sm")
+                    self.project_selector = (
+                        ui.select(
+                            options=self.get_available_projects(),
+                            value=self.selected_project,
+                        )
+                        .props("filled dense")
+                        .classes("min-w-48")
                     )
-                    .props("filled")
-                    .classes("min-w-48")
+                    self.load_project_button = ui.button(
+                        "Load Project", on_click=self.on_load_project_clicked
+                    ).props("outlined dense")
+                    if self.project_loaded:
+                        self.load_project_button.disable()
+                        self.load_project_button.set_text("Project Loaded")
+            # Navigation controls
+            with ui.row().classes("w-full gap-1 m-0 p-0"):
+                ui.button("Previous", on_click=self.prev_page).props("flat dense")
+                self.current_page_display = ui.label(
+                    f"Page {self.current_page_idx} of {self.total_pages}: {self.current_page_name}"
+                ).classes("text-sm")
+                ui.button("Next", on_click=self.next_page).props("flat dense")
+                self.page_number_input = ui.number(
+                    "Go to page",
+                    value=self.current_page_idx,
+                    min=0,
+                    max=self.total_pages,
+                    precision=0,
+                ).classes("w-24")
+                ui.button("Go", on_click=self.go_to_page).props("flat dense")
+
+            # Action buttons
+            with ui.row().classes("w-full gap-1 m-0 p-0"):
+                ui.button("Save OCR to File", on_click=self.export_ocr_document).props(
+                    "outlined dense"
                 )
-                self.load_project_button = ui.button(
-                    "Load Project", on_click=self.on_load_project_clicked
-                ).props("outlined")
-                if self.project_loaded:
-                    self.load_project_button.disable()
-                    self.load_project_button.set_text("Project Loaded")
+                ui.button("Reload OCR from File", on_click=self.reload_ocr_from_file).props(
+                    "outlined dense"
+                )
+                ui.button("Reset OCR", on_click=self.reset_ocr).props("outlined dense")
+                ui.button("Export Training Set", on_click=self.export_training).props(
+                    "outlined dense color=green"
+                )
+                ui.button("Export Validation Set", on_click=self.export_validation).props(
+                    "outlined dense color=blue"
+                )
+
+            # Additional action buttons
+            with ui.row().classes("w-full gap-1 m-0 p-0"):
+                ui.button(
+                    "Expand & Refine All BBoxes", on_click=self.expand_and_refine_all_bboxes
+                ).props("outlined dense")
+                ui.button("Refine All BBoxes", on_click=self.refine_all_bboxes).props(
+                    "outlined dense"
+                )
+                ui.button("Refresh Page Images", on_click=self.refresh_page_images).props(
+                    "outlined dense"
+                )
+
 
         # Main content area
-        with ui.splitter(value=30).classes("w-full h-96") as splitter:
+        with ui.splitter(value=30).classes("w-full h-screen") as splitter:
             with splitter.before:
                 # Image tabs
                 with ui.tabs().classes("w-full") as tabs:
@@ -672,25 +693,25 @@ class NiceGuiLabeler:
                 with ui.tab_panels(tabs, value=mismatches_tab).classes("w-full"):
                     with ui.tab_panel(mismatches_tab):
                         self.ocr_image_mismatches = ui.image().classes(
-                            "max-w-full max-h-96"
+                            "max-w-full max-h-80"
                         )
 
                     with ui.tab_panel(original_tab):
-                        self.plain_image = ui.image().classes("max-w-full max-h-96")
+                        self.plain_image = ui.image().classes("max-w-full max-h-80")
 
                     with ui.tab_panel(paragraphs_tab):
                         self.ocr_image_pgh_bounding_box = ui.image().classes(
-                            "max-w-full max-h-96"
+                            "max-w-full max-h-80"
                         )
 
                     with ui.tab_panel(lines_tab):
                         self.ocr_image_lines_bounding_box = ui.image().classes(
-                            "max-w-full max-h-96"
+                            "max-w-full max-h-80"
                         )
 
                     with ui.tab_panel(words_tab):
                         self.ocr_image_words_bounding_box = ui.image().classes(
-                            "max-w-full max-h-96"
+                            "max-w-full max-h-80"
                         )
 
             with splitter.after:
