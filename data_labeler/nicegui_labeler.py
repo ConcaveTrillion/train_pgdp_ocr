@@ -639,7 +639,7 @@ class NiceGuiLabeler:
                 ui.button("Previous", on_click=self.prev_page).props("flat dense")
                 self.current_page_display = ui.label(
                     f"Page {self.current_page_idx} of {self.total_pages}: {self.current_page_name}"
-                ).classes("text-sm")
+                ).classes("text-sm flex items-center bg-blue-100 px-2 py-1 rounded")
                 ui.button("Next", on_click=self.next_page).props("flat dense")
                 self.page_number_input = ui.number(
                     "Go to page",
@@ -683,7 +683,7 @@ class NiceGuiLabeler:
         with ui.splitter(value=30).classes("w-full h-screen") as splitter:
             with splitter.before:
                 # Image tabs
-                with ui.tabs().classes("w-full") as tabs:
+                with ui.tabs() as tabs:
                     mismatches_tab = ui.tab("Mismatches")
                     original_tab = ui.tab("Original")
                     paragraphs_tab = ui.tab("Paragraphs")
@@ -693,30 +693,30 @@ class NiceGuiLabeler:
                 with ui.tab_panels(tabs, value=mismatches_tab).classes("w-full"):
                     with ui.tab_panel(mismatches_tab):
                         self.ocr_image_mismatches = ui.image().classes(
-                            "max-w-full max-h-80"
+                            "max-w-full"
                         )
 
                     with ui.tab_panel(original_tab):
-                        self.plain_image = ui.image().classes("max-w-full max-h-80")
+                        self.plain_image = ui.image().classes("max-w-full")
 
                     with ui.tab_panel(paragraphs_tab):
                         self.ocr_image_pgh_bounding_box = ui.image().classes(
-                            "max-w-full max-h-80"
+                            "max-w-full"
                         )
 
                     with ui.tab_panel(lines_tab):
                         self.ocr_image_lines_bounding_box = ui.image().classes(
-                            "max-w-full max-h-80"
+                            "max-w-full"
                         )
 
                     with ui.tab_panel(words_tab):
                         self.ocr_image_words_bounding_box = ui.image().classes(
-                            "max-w-full max-h-80"
+                            "max-w-full"
                         )
 
             with splitter.after:
                 # Text display tabs
-                with ui.tabs().classes("w-full") as text_tabs:
+                with ui.tabs() as text_tabs:
                     matching_tab = ui.tab("Line Matching")
                     ocr_text_tab = ui.tab("OCR Text")
                     pgdp_text_tab = ui.tab("PGDP P3 Text")
